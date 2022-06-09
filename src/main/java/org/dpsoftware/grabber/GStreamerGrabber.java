@@ -36,7 +36,8 @@ import java.awt.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.IntBuffer;
-import java.util.LinkedHashMap;
+import java.util.*;
+import java.util.List;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -144,6 +145,8 @@ public class GStreamerGrabber extends javax.swing.JComponent {
                     int pixelInUseY = value.getHeight() / Constants.RESAMPLING_FACTOR;
                     if (!value.isGroupedLed()) {
                         // We start with a negative offset
+                        Map m = new HashMap();
+
                         for (int y = 0; y < pixelInUseY; y++) {
                             for (int x = 0; x < pixelInUseX; x++) {
                                 int offsetX = (xCoordinate + (skipPixel * x));
@@ -154,14 +157,25 @@ public class GStreamerGrabber extends javax.swing.JComponent {
                                 r += rgb >> 16 & 0xFF;
                                 g += rgb >> 8 & 0xFF;
                                 b += rgb & 0xFF;
+                                Integer counter = (Integer) m.get(rgb);
+                                if (counter == null)
+                                    counter = 0;
+                                counter++;
+                                m.put(rgb, counter);
                                 pickNumber++;
                             }
                         }
-                        // No need for the square root here since we calculate the gamma
-                        r = ImageProcessor.gammaCorrection(r / pickNumber);
-                        g = ImageProcessor.gammaCorrection(g / pickNumber);
-                        b = ImageProcessor.gammaCorrection(b / pickNumber);
-                        if (FireflyLuciferin.config.isEyeCare() && (r+g+b) < 10) r = g = b = (Constants.DEEP_BLACK_CHANNEL_TOLERANCE * 2);
+                        int colourHex = getMostCommonColour(m);
+                        System.out.println(colourHex);
+                        r = colourHex >> 16 & 0xFF;
+                        g = colourHex >> 8 & 0xFF;
+                        b = colourHex & 0xFF;
+
+//                        // No need for the square root here since we calculate the gamma
+//                        r = ImageProcessor.gammaCorrection(r / pickNumber);
+//                        g = ImageProcessor.gammaCorrection(g / pickNumber);
+//                        b = ImageProcessor.gammaCorrection(b / pickNumber);
+//                        if (FireflyLuciferin.config.isEyeCare() && (r+g+b) < 10) r = g = b = (Constants.DEEP_BLACK_CHANNEL_TOLERANCE * 2);
                         leds[key - 1] = new Color(r, g, b);
                     } else {
                         leds[key - 1] = leds[key - 2];
@@ -177,6 +191,27 @@ public class GStreamerGrabber extends javax.swing.JComponent {
             } finally {
                 bufferLock.unlock();
             }
+        }
+
+        public static Integer getMostCommonColour(Map map) {
+            List list = new LinkedList(map.entrySet());
+            Collections.sort(list, new Comparator() {
+                public int compare(Object o1, Object o2) {
+                    return ((Comparable) ((Map.Entry) (o1)).getValue())
+                            .compareTo(((Map.Entry) (o2)).getValue());
+                }
+            });
+            Map.Entry me = (Map.Entry) list.get(list.size() - 1);
+            return (Integer) me.getKey();
+//            return rgb[0] + " " + rgb[1] + " " + rgb[2];
+        }
+
+        public static int[] getRGBArr(int pixel) {
+            int red = (pixel >> 16) & 0xff;
+            int green = (pixel >> 8) & 0xff;
+            int blue = (pixel) & 0xff;
+            return new int[]{red, green, blue};
+
         }
 
         /**
